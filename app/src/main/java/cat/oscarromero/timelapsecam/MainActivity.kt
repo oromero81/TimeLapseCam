@@ -2,9 +2,7 @@ package cat.oscarromero.timelapsecam
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
-import android.os.Bundle
-import android.os.Environment
+import android.os.*
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.Toast
@@ -46,12 +44,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val executor = Executors.newSingleThreadExecutor()
+    private val handlerPhoto = Handler(Looper.myLooper()!!)
+    private val runnablePhoto: Runnable by lazy {
+        Runnable {
+            takePicture()
+            handlerPhoto.postDelayed(runnablePhoto, timeEditText.text.toString().toInt() * 1000L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         takePhotoButton.setOnClickListener { takePicture() }
+        startTimeLapseButton.setOnClickListener { handlerPhoto.post(runnablePhoto) }
+        timeEditText.setText("$DEFAULT_PHOTO_INTERVAL")
     }
 
     override fun onResume() {
@@ -71,6 +78,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        handlerPhoto.removeCallbacks(runnablePhoto)
     }
 
     override fun onDestroy() {
@@ -151,5 +163,6 @@ class MainActivity : AppCompatActivity() {
         private val REQUIRED_PERMISSIONS =
             arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE)
         private const val FILENAME_FORMAT = "yyyy.MM.dd_HH:mm:ss"
+        private const val DEFAULT_PHOTO_INTERVAL = 10
     }
 }
