@@ -2,36 +2,81 @@ package cat.oscarromero.timelapsecam
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.view.WindowInsets
+import android.view.WindowManager
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.AspectRatio
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.Preview
+import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import kotlinx.android.synthetic.main.activity_main.*
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
     private val cameraProviderFuture by lazy {
         ProcessCameraProvider.getInstance(this)
     }
-    private val imagePreview: Preview by lazy {
+    private val imagePreviewUseCase: Preview by lazy {
         Preview.Builder().apply {
             setTargetAspectRatio(AspectRatio.RATIO_16_9)
             setTargetRotation(cameraPreviewView.display.rotation)
         }.build()
     }
+    private val imageCaptureUseCase by lazy {
+        ImageCapture.Builder().apply {
+            setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+        }.build()
+    }
+    private val outputDirectory: File by lazy {
+        val dir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                .toString() + File.separator + "timelapse"
+        )
+        if (!dir.exists()) {
+            dir.mkdir()
+        }
+        dir
+    }
+
+    private val executor = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        takePhotoButton.setOnClickListener { takePicture() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.hide(WindowInsets.Type.statusBars())
+        } else {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN
+            )
+        }
 
         if (allPermissionsGranted()) {
             cameraPreviewView.post { startCamera() }
         } else {
             requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        executor.shutdown()
     }
 
     override fun onRequestPermissionsResult(
@@ -55,8 +100,14 @@ class MainActivity : AppCompatActivity() {
                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
                 val cameraProvider = cameraProviderFuture.get()
 
-                cameraProvider.bindToLifecycle(this, cameraSelector, imagePreview)
-                imagePreview.setSurfaceProvider(cameraPreviewView.surfaceProvider)
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    this,
+                    cameraSelector,
+                    imagePreviewUseCase,
+                    imageCaptureUseCase
+                )
+                imagePreviewUseCase.setSurfaceProvider(cameraPreviewView.surfaceProvider)
             },
             ContextCompat.getMainExecutor(this)
         )
@@ -66,8 +117,39 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
     }
 
+    private fun takePicture() {
+        val file = File(
+            outputDirectory,
+            "Timelapse_" + SimpleDateFormat(
+                FILENAME_FORMAT,
+                Locale.US
+            ).format(System.currentTimeMillis()) + ".jpg"
+        )
+        val outputFileOptions = ImageCapture.OutputFileOptions.Builder(file).build()
+        imageCaptureUseCase.takePicture(
+            outputFileOptions,
+            executor,
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                    val msg = "Photo capture succeeded: ${file.absolutePath}"
+                    cameraPreviewView.post {
+                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    val msg = "Photo capture failed: ${exception.message}"
+                    cameraPreviewView.post {
+                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                    }
+                }
+            })
+    }
+
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
+        private val REQUIRED_PERMISSIONS =
+            arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        private const val FILENAME_FORMAT = "yyyy.MM.dd_HH:mm:ss"
     }
 }
