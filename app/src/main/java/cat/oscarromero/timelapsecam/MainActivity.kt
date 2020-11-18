@@ -3,6 +3,7 @@ package cat.oscarromero.timelapsecam
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.*
+import android.util.Size
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.Toast
@@ -30,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private val imageCaptureUseCase by lazy {
         ImageCapture.Builder().apply {
             setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            setTargetResolution(Size(1920, 1080))
         }.build()
     }
     private val outputDirectory: File by lazy {
