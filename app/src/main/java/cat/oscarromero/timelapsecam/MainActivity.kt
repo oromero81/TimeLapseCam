@@ -3,7 +3,9 @@ package cat.oscarromero.timelapsecam
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.*
+import android.util.Log
 import android.util.Size
+import android.view.MotionEvent
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.Toast
@@ -109,18 +111,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCamera() {
+        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+        val cameraProvider = cameraProviderFuture.get()
+
+        cameraProvider.unbindAll()
+        val camera = cameraProvider.bindToLifecycle(
+            this,
+            cameraSelector,
+            imagePreviewUseCase,
+            imageCaptureUseCase
+        )
+
+        cameraPreviewView.setOnTouchListener { view, event ->
+            view.performClick()
+
+            return@setOnTouchListener when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val factory: MeteringPointFactory = SurfaceOrientedMeteringPointFactory(
+                        cameraPreviewView.width.toFloat(), cameraPreviewView.height.toFloat()
+                    )
+                    val autoFocusPoint = factory.createPoint(event.x, event.y)
+                    try {
+                        camera.cameraControl.startFocusAndMetering(
+                            FocusMeteringAction.Builder(autoFocusPoint).apply {
+                                //focus only when the user tap the preview
+                                disableAutoCancel()
+                            }.build()
+                        )
+                    } catch (e: CameraInfoUnavailableException) {
+                        Log.d("ERROR", "cannot access camera", e)
+                    }
+                    true
+                }
+                else -> false // Unhandled event.
+            }
+        }
+
         cameraProviderFuture.addListener(
             Runnable {
-                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-                val cameraProvider = cameraProviderFuture.get()
-
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    this,
-                    cameraSelector,
-                    imagePreviewUseCase,
-                    imageCaptureUseCase
-                )
                 imagePreviewUseCase.setSurfaceProvider(cameraPreviewView.surfaceProvider)
             },
             ContextCompat.getMainExecutor(this)
