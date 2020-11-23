@@ -33,7 +33,7 @@ class MainActivity : AppCompatActivity() {
     private val imageCaptureUseCase by lazy {
         ImageCapture.Builder().apply {
             setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            setTargetResolution(Size(1920, 1080))
+            setTargetResolution(Size(1920 * 2, 1080 * 2))
         }.build()
     }
     private val outputDirectory: File by lazy {
