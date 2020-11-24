@@ -56,6 +56,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var photosCount = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -63,6 +65,8 @@ class MainActivity : AppCompatActivity() {
         takePhotoButton.setOnClickListener { takePicture() }
         startTimeLapseButton.setOnClickListener { handlerPhoto.post(runnablePhoto) }
         timeEditText.setText("$DEFAULT_PHOTO_INTERVAL")
+        photosCount = 0
+        totalPhotosTextView.text = "$photosCount"
     }
 
     override fun onResume() {
@@ -176,8 +180,11 @@ class MainActivity : AppCompatActivity() {
             executor,
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                    val msg = "Photo capture succeeded: ${file.absolutePath}"
+                    val msg = "Photo capture succeeded"
                     cameraPreviewView.post {
+                        photosCount++
+                        totalPhotosTextView.text = "$photosCount"
+
                         Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                     }
                 }
@@ -196,6 +203,6 @@ class MainActivity : AppCompatActivity() {
         private val REQUIRED_PERMISSIONS =
             arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE)
         private const val FILENAME_FORMAT = "yyyy.MM.dd_HH:mm:ss"
-        private const val DEFAULT_PHOTO_INTERVAL = 10
+        private const val DEFAULT_PHOTO_INTERVAL = 20
     }
 }
